@@ -1,0 +1,326 @@
+<?php
+
+/**
+ * @file
+ * Module file for bubblesort_module.
+ */
+
+/**
+ * @defgroup bubblesort Example: Page
+ * @ingroup examples
+ * @{
+ */
+
+/**
+ * Implements hook_help().
+ *
+ * Generic help pages
+ */
+function bubblesort_help($path, $arg) {
+  switch ($path) {
+    case 'examples/bubblesort/simple':
+      return t('Todo: help for bubblesort!.');
+    case 'admin/help#bubblesort':
+      return t("Todo: Some times admins need help too..");
+  }
+}
+
+/**
+ * Implements hook_permission().
+ *
+ * Generic permissions
+ */
+function bubblesort_permission() {
+  return array(
+    'access simple page' => array(
+      'title' => t('Access simple page'),
+      'description' => t('Allow users to access simple page'),
+    ),
+    'access arguments page' => array(
+      'title' => t('Access page with arguments'),
+      'description' => t('Allow users to access page with arguments'),
+    ),
+  );
+}
+
+/**
+ * Implements hook_menu().
+ *
+ * shuffle - generates new number matrix
+ * shuffle_next -
+ *  - tried to set up more json friendly approach at first, went with url
+ *  - iterates through bubble sort
+ *    2 - swap  todo: placeholder for passing swap event for animation
+ *    3 - sorted - if this remains true through entire iteration, sort done
+ *    4 - callback - whether or not to continue running operations after iteration
+ *    5 - callback_iteration - which iteration over $numbers
+ *    6 - callback_pointer - where in iteration to pick up processing
+ *    7 - numbers - the data that is being sorted
+ */
+function bubblesort_menu() {
+  $items['bubblesort'] = array(
+    'title' => 'Bubblesort',
+    'type' => MENU_NORMAL_ITEM,
+    'page callback' => 'bubblesort_description',
+    'access callback' => TRUE,
+    'access arguments' => array('access content'),
+  );
+  $items['bubblesort/shuffle'] = array(
+    'type' => MENU_CALLBACK,
+    'page callback' => 'bubblesort_shuffle_init_callback',
+    'access arguments' => array('access content'),
+  );
+  $items['bubblesort/shuffle_next/%/%/%/%/%/%'] = array(
+    'page callback' => 'bubblesort_shuffle_next_callback',
+    'type' => MENU_CALLBACK,
+    'page arguments' => array(2, 3, 4, 5, 6, 7),
+    'access arguments' => array('access content'),
+  );
+  return $items;
+}
+
+/**
+ * @function bubblesort_next_button
+ *  Prepare next button, map path to values for hook_menu shuffle_next
+ *
+ * @param $shuffle
+ * @return string
+ */
+function bubblesort_next_button($shuffle) {
+  $next_button = l(t('Step'), 'bubblesort/shuffle_next/'
+    . $shuffle['swap'] . '/'
+    . $shuffle['sorted'] . '/'
+    . $shuffle['callback'] . '/'
+    . $shuffle['callback_iteration'] . '/'
+    . $shuffle['callback_pointer'] . '/'
+    . implode('-', $shuffle['numbers']),
+    array('attributes' => array('class' => 'use-ajax')));
+
+  return $next_button;
+}
+
+/**
+ * @function bubblesort_description
+ *
+ * Constructs base page with shuffle button
+ *
+ * Could be made prettier with placeholders for eventual value representations
+ *.
+ */
+function bubblesort_description() {
+  drupal_add_library('system', 'drupal.ajax');
+  return array(
+    '#markup' => "<div id='ajax-shuffle'>"
+      . l(t('Shuffle'), 'bubblesort/shuffle', array('attributes' => array('class' => 'use-ajax')))
+      . "</div>"
+      . "<div id='ajax-next'></div><div id='ajax-play'></div><div style='clear: both'></div>"
+      . "<div id='ajax-display'></div>"
+  );
+}
+
+/**
+ * @function bubblesort_render
+ *
+ * Takes the shuffle array and renders 10 rows
+ * Loops through each of the values
+ *
+ * todo: clean up inline css and place into style sheet and move width setting to javascript
+ * todo: could just hand off pointer for animation wihout redrawing all
+ * todo: make some sort of non-ajax accessible interface of data
+ *
+ * @param $shuffle
+ * @return string
+ */
+function bubblesort_render($shuffle) {
+  $out = '';
+  for ($i = 0; $i < count($shuffle['numbers']); $i++) {
+    if ($shuffle['callback_pointer'] == $i) {
+      $bgcolor = '#90A4AE';
+    }
+    elseif ($shuffle['callback_pointer'] + 1 == $i) {
+      $bgcolor = '#90A4AE';
+    }
+    else {
+      $bgcolor = bubblesort_number_palette($shuffle['numbers'][$i]);
+    }
+    $out .= '<div style="width: 100%; background-color: #F5F5F5;  height:40px; margin: 5px 0px;">
+        <div style="background-color: ' . $bgcolor . '; width: ' . $shuffle['numbers'][$i] . '%; height: 40px; margin: 5px 0px;"></div></div>';
+  }
+  $out .= '<br>';
+  return $out;
+}
+
+/**
+ * @function bubblesort_shuffle
+ *
+ * Sets parameters for creating matrix of shuffled numbers
+ *
+ * @param int $size
+ *  How many numbers to generate
+ * @param int $min
+ *  Minimum number
+ * @param int $max
+ *  Maximum number
+ * @return array
+ */
+function bubblesort_shuffle($size = 10, $min = 0, $max = 100) {
+  for ($i = 0; $i <= $size - 1; $i++) {
+    $numbers[$i] = rand($min, $max);
+  }
+
+  $shuffle = array(
+    'swap' => 0,
+    'sorted' => 1,
+    'callback' => 1,
+    'callback_iteration' => 0,
+    'callback_pointer' => 0,
+    'numbers' => $numbers,
+  );
+  return $shuffle;
+}
+
+/**
+ * @function bubblesort_ops
+ * The operations / processor for the bubble sort
+ * Reviews $shuffle data and runs step and passes along callback information
+ *  in new $shuffle
+ *
+ * @param $shuffle
+ * @return array
+ */
+
+function bubblesort_ops($shuffle) {
+  $callback_iteration = $shuffle['callback_iteration']; // iterations over entire array
+  $callback_pointer = $shuffle['callback_pointer'];     // callback_pointer in array
+  $swap = 0;                      // true only when swap occurs
+  $sorted = $shuffle['sorted'];       // one switch per callback_iteration possible
+  $callback = $shuffle['callback'];
+
+  $current = $shuffle['numbers'][$callback_pointer];
+  $next = $shuffle['numbers'][$callback_pointer + 1];
+
+  if ($next > $current) {
+    $shuffle['numbers'][$callback_pointer] = $next;
+    $shuffle['numbers'][$callback_pointer + 1] = $current;
+    $sorted = 0;
+    $swap = 1;
+  }
+
+  // for callback based outer-loop
+  if ($callback_pointer == count($shuffle['numbers']) - 2) {
+    $callback_iteration = $shuffle['callback_iteration'] + 1;
+    $callback_pointer = 0;
+
+    if ($sorted == 0) {
+      $callback = 1;
+      $sorted = 1;
+    }
+    else {
+      //done processing
+      $callback = 0;
+    }
+
+  }
+  else {
+    $callback_pointer = $callback_pointer + 1;
+  }
+
+  $shuffle = array(
+    'swap' => $swap,
+    'sorted' => $sorted,
+    'callback' => $callback,
+    'callback_iteration' => $callback_iteration,
+    'callback_pointer' => $callback_pointer,
+    'numbers' => $shuffle['numbers'],
+  );
+  return $shuffle;
+}
+
+
+/**
+ * @function bubblesort_shuffle_init_callback
+ *
+ * Initializes and kicks off first operation
+ * Adds step button
+ *
+ */
+function bubblesort_shuffle_init_callback() {
+  $shuffle = bubblesort_shuffle();
+  $out = bubblesort_render($shuffle);
+  $commands = array();
+
+  $commands[] = ajax_command_replace('#ajax-display', "<div id='ajax-display'>" . $out . "</div>");
+  $commands[] = ajax_command_replace('#ajax-next', "<div id='ajax-next'>" . bubblesort_next_button($shuffle) . "</div>");
+  $commands[] = ajax_command_changed('#ajax-display');
+  ajax_deliver(array('#type' => 'ajax', '#commands' => $commands));
+}
+
+
+/**
+ * @function bubblesort_shuffle_next_callback
+ *
+ * Evaluates values passed through user pressing 'step' button
+ * Converts them into a $shuffle array and sends to processor
+ * There is probably a much more elegant way of passing these values with ajax
+ * todo: figure out better way to pass values back and forth
+ *
+ * @param $swap
+ * @param $sorted
+ * @param $callback
+ * @param $callback_iteration
+ * @param $callback_pointer
+ * @param $numbers
+ */
+function bubblesort_shuffle_next_callback($swap, $sorted, $callback, $callback_iteration, $callback_pointer, $numbers) {
+  $shuffle = array(
+    'swap' => $swap,
+    'sorted' => $sorted,
+    'callback' => $callback,
+    'callback_iteration' => $callback_iteration,
+    'callback_pointer' => $callback_pointer,
+    'numbers' => array_map('intval', explode('-', $numbers)),
+  );
+
+  $shuffle = bubblesort_ops($shuffle);
+  if ($shuffle['callback'] == 1) {
+    $out = bubblesort_render($shuffle);
+    $commands = array();
+
+    $commands[] = ajax_command_replace('#ajax-display', "<div id='ajax-display'>" . $out . "</div>");
+    $commands[] = ajax_command_replace('#ajax-next', "<div id='ajax-next'>" . bubblesort_next_button($shuffle) . "</div>");
+  }
+  else {
+    $commands[] = ajax_command_replace('#ajax-next', "<div id='ajax-next'></div>");
+  }
+  $commands[] = ajax_command_changed('#ajax-display');
+  ajax_deliver(array('#type' => 'ajax', '#commands' => $commands));
+}
+
+/**
+ * @function bubblesort_number_palette
+ *  Provides a color based on range number falls within
+ * todo: un-hardcode $max
+ *
+ * @param $num
+ * @return string
+ */
+function bubblesort_number_palette($num) {
+  $max = 100;
+  $range = $num / $max;
+  if ($range > .80) {
+    $color = '#0277BD';
+  }
+  elseif ($range > .60) {
+    $color = '#00838F';
+  }
+  elseif ($range > .40) {
+    $color = '#00695C';
+  }
+  elseif ($range > .20) {
+    $color = '#2E7D32';
+  }
+  else {
+    $color = '#558B2F';
+  }
+  return $color;
+}

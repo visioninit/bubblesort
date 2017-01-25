@@ -1,0 +1,28 @@
+#ajax-shuffle, #ajax-next {
+    height:40px;
+    width: 50%;
+    background-color: #5a5a5a;
+    display:inline;
+    float: left;
+
+}
+#ajax-shuffle a, #ajax-next a {
+    height:40px;
+    width:100%;
+    background-color: #607D8B;
+    color: #fff;
+    text-align: center;
+    display: block;
+    line-height:40px;
+    font-size: 2em;
+    font-family: sans-serif;
+    text-decoration: none;
+}
+
+#ajax-next a:hover, #ajax-shuffle a:hover {
+    background-color: #78909C;
+}
+
+
+
+.ajax-progress-throbber { display: none}

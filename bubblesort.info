@@ -1,0 +1,7 @@
+name = Bubblesort
+description = A simulation of bubble sort algorithm using PHP
+package = Programming Challenge
+core = 7.x
+version = "7.x-1.x-dev"
+project = "bubblesort"
+stylesheets[all][]  = bubblesort.css
